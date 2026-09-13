@@ -2,6 +2,12 @@
 .env
 *.env
 !.env.example
+!agents/*/.env.example
+
+# Agent environment files (contains actual IPs)
+agents/*/.env.pve
+agents/*/.env.pve-1
+agents/*/.env.dokploy
 
 # Docker volumes data
 grafana_data/
@@ -38,6 +44,7 @@ desktop.ini
 *.bak
 *.backup
 *_backup
+sentinel-backup-*.tar.gz
 
 # Docker
 docker-compose.override.yml
