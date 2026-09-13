@@ -1,0 +1,89 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: ${LOKI_URL}
+    tenant_id: sentinel-stack
+
+scrape_configs:
+  - job_name: docker-logs
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["com.docker.compose.service"]
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+      - source_labels: ['__meta_docker_container_log_stream']
+        target_label: 'stream'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'service'
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_project']
+        target_label: 'project'
+      - replacement: '${NODE_HOSTNAME}'
+        target_label: 'host'
+    pipeline_stages:
+      - docker: {}
+      - match:
+          selector: '{service!=""}'
+          stages:
+            - logfmt:
+                mapping:
+                  level: level
+                  msg: msg
+                  time: time
+            - labels:
+                level:
+      - multiline:
+          firstline: '^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}'
+          max_wait_time: 3s
+
+  - job_name: varlogs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          host: ${NODE_HOSTNAME}
+          __path__: /var/log/*log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?P<host>\S+)\s+(?P<program>\S+?)(\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+      - labels:
+          host:
+          program:
+      - timestamp:
+          source: timestamp
+          format: 'Jan 2 15:04:05'
+          location: Local
+
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          host: ${NODE_HOSTNAME}
+          __path__: /var/log/syslog
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?P<host>\S+)\s+(?P<program>\S+?)(\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+      - labels:
+          host:
+          program:
+      - timestamp:
+          source: timestamp
+          format: 'Jan 2 15:04:05'
+          location: Local
+
+limits_config:
+  readline_rate_enabled: true
+  readline_rate: 10000
+  readline_burst: 20000

@@ -1,0 +1,97 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: ${LOKI_URL}
+    tenant_id: sentinel-stack
+
+scrape_configs:
+  - job_name: varlogs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          host: ${NODE_HOSTNAME}
+          __path__: /var/log/*log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?P<host>\S+)\s+(?P<program>\S+?)(\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+      - labels:
+          host:
+          program:
+      - timestamp:
+          source: timestamp
+          format: 'Jan 2 15:04:05'
+          location: Local
+
+  - job_name: syslog
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          host: ${NODE_HOSTNAME}
+          __path__: /var/log/syslog
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\w+\s+\d+\s+\d+:\d+:\d+)\s+(?P<host>\S+)\s+(?P<program>\S+?)(\[(?P<pid>\d+)\])?:\s+(?P<message>.*)$'
+      - labels:
+          host:
+          program:
+      - timestamp:
+          source: timestamp
+          format: 'Jan 2 15:04:05'
+          location: Local
+
+  - job_name: pve-firewall
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: pve-firewall
+          host: ${NODE_HOSTNAME}
+          __path__: /var/log/pve-firewall.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+[+-]\d{4})\s+(?P<message>.*)$'
+      - timestamp:
+          source: timestamp
+          format: RFC3339Nano
+
+  - job_name: pveproxy-access
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: pveproxy-access
+          host: ${NODE_HOSTNAME}
+          __path__: /var/log/pveproxy/access.log
+    pipeline_stages:
+      - regex:
+          expression: '^(?P<remote_addr>\S+)\s+-\s+(?P<user>\S+)\s+\[(?P<timestamp>[^\]]+)\]\s+"(?P<method>\S+)\s+(?P<path>\S+)\s+(?P<protocol>[^"]+)"\s+(?P<status>\d+)\s+(?P<size>\d+)'
+      - labels:
+          user:
+          method:
+          status:
+      - timestamp:
+          source: timestamp
+          format: '02/Jan/2006:15:04:05 -0700'
+
+  - job_name: cluster
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: pve-cluster
+          host: ${NODE_HOSTNAME}
+          __path__: /var/log/pve-cluster.log
+
+limits_config:
+  readline_rate_enabled: true
+  readline_rate: 5000
+  readline_burst: 10000
