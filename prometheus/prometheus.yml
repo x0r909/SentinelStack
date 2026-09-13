@@ -94,9 +94,9 @@ scrape_configs:
   - job_name: 'node-exporter-remote'
     static_configs:
       - targets:
-          - 'PROXMOX_NODE1_IP:9100'
-          - 'PROXMOX_NODE2_IP:9100'
-          - 'DOKPLOY_IP:9100'
+          - '192.168.18.254:9100'
+          - '192.168.18.253:9100'
+          - '192.168.18.150:9100'
         labels:
           host_type: 'remote'
     relabel_configs:
@@ -112,7 +112,7 @@ scrape_configs:
   - job_name: 'cadvisor-remote-dokploy'
     static_configs:
       - targets:
-          - 'DOKPLOY_IP:8080'
+          - '192.168.18.150:8080'
         labels:
           host_type: 'remote'
           server: 'dokploy'
