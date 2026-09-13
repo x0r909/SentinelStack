@@ -1,0 +1,43 @@
+# Environment variables (contains secrets)
+.env
+*.env
+!.env.example
+
+# Docker volumes data
+grafana_data/
+prometheus_data/
+alertmanager_data/
+loki_data/
+uptime_kuma_data/
+
+# Grafana runtime
+grafana/provisioning/notifiers/
+
+# Promtail positions
+promtail/positions.yaml
+agents/*/positions.yaml
+
+# Temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Backup files
+*.bak
+*.backup
+*_backup
+
+# Docker
+docker-compose.override.yml
