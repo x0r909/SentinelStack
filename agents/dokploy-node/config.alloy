@@ -1,0 +1,101 @@
+// SentinelStack Agent - Grafana Alloy Configuration (Dokploy node)
+// LOKI_URL and NODE_HOSTNAME come from environment variables.
+
+loki.write "remote" {
+  endpoint {
+    url = env("LOKI_URL")
+  }
+}
+
+// ============================================
+// DISCOVERY: Docker containers
+// ============================================
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+discovery.relabel "docker_containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    target_label = "host"
+    replacement  = env("NODE_HOSTNAME")
+  }
+}
+
+// ============================================
+// DOCKER LOGS
+// ============================================
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker_containers.output
+  forward_to = [loki.process.docker.receiver]
+}
+
+loki.process "docker" {
+  stage.match {
+    selector = "{service!=\"\"}"
+
+    stage.logfmt {
+      mapping = { level = "level", msg = "msg", time = "time" }
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+  }
+
+  forward_to = [loki.write.remote.receiver]
+}
+
+// ============================================
+// SYSTEM LOGS
+// ============================================
+
+loki.source.file "varlogs" {
+  targets = [
+    { __path__ = "/var/log/*log", job = "varlogs", host = env("NODE_HOSTNAME") },
+  ]
+  forward_to = [loki.process.syslog.receiver]
+  tail_from_end = false
+}
+
+loki.process "syslog" {
+  stage.regex {
+    expression = "^(?P<timestamp>\\w+\\s+\\d+\\s+\\d+:\\d+:\\d+)\\s+(?P<sys_host>\\S+)\\s+(?P<program>\\S+?)(\\[(?P<pid>\\d+)\\])?:\\s+(?P<message>.*)$"
+  }
+
+  stage.labels {
+    values = {
+      host    = "sys_host",
+      program = "program",
+    }
+  }
+
+  stage.timestamp {
+    source   = "timestamp"
+    format   = "Jan 2 15:04:05"
+    location = "Local"
+  }
+
+  forward_to = [loki.write.remote.receiver]
+}

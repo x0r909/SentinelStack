@@ -1,0 +1,62 @@
+groups:
+  - name: sentinel-stack.proxmox-alerts
+    rules:
+      - alert: ProxmoxNodeOffline
+        expr: up{job="proxmox"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: proxmox
+        annotations:
+          summary: "Proxmox node {{ $labels.instance }} is unreachable"
+          description: "Unable to scrape metrics from Proxmox node {{ $labels.instance }}"
+
+      - alert: ProxmoxVMDown
+        expr: pve_vm_status{status="stopped"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          category: proxmox
+        annotations:
+          summary: "VM {{ $labels.name }} is stopped on {{ $labels.instance }}"
+          description: "VM {{ $labels.vmid }} ({{ $labels.name }}) has been stopped for more than 5 minutes"
+
+      - alert: ProxmoxLXCDown
+        expr: pve_lxc_status{status="stopped"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          category: proxmox
+        annotations:
+          summary: "LXC {{ $labels.name }} is stopped on {{ $labels.instance }}"
+          description: "LXC {{ $labels.vmid }} ({{ $labels.name }}) has been stopped for more than 5 minutes"
+
+      - alert: ProxmoxHighCPU
+        expr: pve_node_cpu_usage * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: proxmox
+        annotations:
+          summary: "High CPU on Proxmox node {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}%"
+
+      - alert: ProxmoxHighMemory
+        expr: pve_node_memory_usage * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          category: proxmox
+        annotations:
+          summary: "High memory on Proxmox node {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}%"
+
+      - alert: ProxmoxStorageCritical
+        expr: (pve_storage_used_bytes / pve_storage_total_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          category: proxmox
+        annotations:
+          summary: "Storage {{ $labels.storage }} critical on {{ $labels.instance }}"
+          description: "Storage is {{ $value | printf \"%.1f\" }}% full"

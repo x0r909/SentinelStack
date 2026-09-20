@@ -1,0 +1,106 @@
+groups:
+  - name: sentinel-stack.storage-alerts
+    rules:
+      - alert: PrometheusStorageNearLimit
+        expr: (prometheus_tsdb_storage_blocks_bytes / prometheus_tsdb_retention_limit_bytes) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: storage
+        annotations:
+          summary: "Prometheus storage nearing limit"
+          description: "Prometheus storage is {{ $value | printf \"%.1f\" }}% of retention limit"
+
+      - alert: LokiStorageNearLimit
+        expr: loki_ingester_chunks_stored_bytes / (30 * 1024 * 1024 * 1024) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          category: storage
+        annotations:
+          summary: "Loki storage high"
+          description: "Loki storage usage is high"
+
+# ============================================
+# NEW ALERTS (v2.0)
+# ============================================
+groups:
+  - name: sentinel-stack.new-alerts
+    rules:
+      # SSL certificate expiry (blackbox exporter)
+      - alert: SSLCertificateExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 14 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+          category: certificate
+        annotations:
+          summary: "SSL certificate expiring on {{ $labels.instance }}"
+          description: "Certificate expires in {{ $value | printf \"%.0f\" }} seconds (less than 14 days)"
+
+      - alert: SSLCertificateExpired
+        expr: probe_ssl_earliest_cert_expiry - time() <= 0
+        for: 5m
+        labels:
+          severity: critical
+          category: certificate
+        annotations:
+          summary: "SSL certificate EXPIRED on {{ $labels.instance }}"
+          description: "Certificate has expired"
+
+      # OOM kills
+      - alert: HostOomKillDetected
+        expr: increase(node_vmstat_oom_kill[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          category: node
+        annotations:
+          summary: "OOM kill detected on {{ $labels.instance }}"
+          description: "{{ $value }} process(es) were killed by the OOM killer in the last 5 minutes"
+
+      # Host reboot detection
+      - alert: HostRebooted
+        expr: time() - node_boot_time_seconds < 300
+        for: 1m
+        labels:
+          severity: warning
+          category: node
+        annotations:
+          summary: "Host {{ $labels.instance }} was rebooted"
+          description: "Host uptime is less than 5 minutes — possible unexpected reboot"
+
+      # Network saturation (>80% of 1Gbps sustained)
+      - alert: NetworkSaturationHigh
+        expr: |
+          (rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*"}[5m]) +
+           rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*"}[5m])) * 8 > 0.8 * 1e9
+        for: 10m
+        labels:
+          severity: warning
+          category: node
+        annotations:
+          summary: "Network saturation high on {{ $labels.instance }} ({{ $labels.device }})"
+          description: "Combined RX+TX is above 80% of 1Gbps for 10 minutes"
+
+      # Probe failure (blackbox)
+      - alert: BlackboxProbeFailed
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: service
+        annotations:
+          summary: "Probe failed for {{ $labels.instance }}"
+          description: "Blackbox probe cannot reach {{ $labels.instance }}"
+
+      # Tempo storage errors
+      - alert: TempoRequestErrors
+        expr: increase(tempo_request_duration_seconds_count{status_code=~"5.."}[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: service
+        annotations:
+          summary: "Tempo returning 5xx errors"
+          description: "Tempo had {{ $value }} server errors in the last 10 minutes"

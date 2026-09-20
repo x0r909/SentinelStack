@@ -1,0 +1,8 @@
+# Remote cAdvisor targets
+# Replace with your Docker host IPs running cAdvisor.
+# Prometheus auto-reloads ~5s after saving.
+- targets:
+    - '192.168.1.20:8080'
+  labels:
+    host_type: 'remote'
+    server: 'dokploy'

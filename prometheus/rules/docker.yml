@@ -1,0 +1,32 @@
+groups:
+  - name: sentinel-stack.docker-alerts
+    rules:
+      - alert: DockerContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: docker
+        annotations:
+          summary: "Container {{ $labels.name }} high CPU"
+          description: "Container CPU usage is {{ $value | printf \"%.1f\" }}%"
+
+      - alert: DockerContainerHighMemory
+        expr: (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: docker
+        annotations:
+          summary: "Container {{ $labels.name }} high memory"
+          description: "Container memory usage is {{ $value | printf \"%.1f\" }}%"
+
+      - alert: DockerContainerRestartLoop
+        expr: increase(container_restart_count[1h]) > 5
+        for: 1m
+        labels:
+          severity: critical
+          category: docker
+        annotations:
+          summary: "Container {{ $labels.name }} in restart loop"
+          description: "Container restarted {{ $value }} times in the last hour"

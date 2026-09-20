@@ -1,0 +1,72 @@
+groups:
+  - name: sentinel-stack.node-alerts
+    rules:
+      - alert: NodeHighCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: node
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% (threshold: 85%)"
+
+      - alert: NodeCriticalCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 3m
+        labels:
+          severity: critical
+          category: node
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | printf \"%.1f\" }}% (threshold: 95%)"
+
+      - alert: NodeHighMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: node
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}% (threshold: 85%)"
+
+      - alert: NodeCriticalMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 3m
+        labels:
+          severity: critical
+          category: node
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | printf \"%.1f\" }}% (threshold: 95%)"
+
+      - alert: NodeDiskSpaceWarning
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: node
+        annotations:
+          summary: "Disk space warning on {{ $labels.instance }}"
+          description: "Disk {{ $labels.mountpoint }} is {{ $value | printf \"%.1f\" }}% full (threshold: 85%)"
+
+      - alert: NodeDiskSpaceCritical
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|nsfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|nsfs"})) * 100 > 95
+        for: 3m
+        labels:
+          severity: critical
+          category: node
+        annotations:
+          summary: "Disk space critical on {{ $labels.instance }}"
+          description: "Disk {{ $labels.mountpoint }} is {{ $value | printf \"%.1f\" }}% full (threshold: 95%)"
+
+      - alert: NodeLoadHigh
+        expr: node_load15 / on(instance) count(node_cpu_seconds_total{mode="idle"}) by (instance) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: node
+        annotations:
+          summary: "High load average on {{ $labels.instance }}"
+          description: "15-minute load average is {{ $value | printf \"%.2f\" }}x CPU cores"

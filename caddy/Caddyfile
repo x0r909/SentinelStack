@@ -1,0 +1,46 @@
+# SentinelStack - Caddy Reverse Proxy
+# TLS termination + basic auth untuk UI internal
+# Grafana & Uptime Kuma punya auth sendiri, jadi cukup di-proxies.
+
+{
+	# Local CA untuk self-signed TLS otomatis
+	local_certs
+	skip_install_trust
+
+	admin off
+	auto_https disable_redirects
+}
+
+# ==============================
+# PUBLIC-FACING (punya auth sendiri)
+# ==============================
+
+https://{$GRAFANA_DOMAIN:grafana.local} {
+	tls internal
+	reverse_proxy grafana:3000
+}
+
+https://{$KUMA_DOMAIN:status.local} {
+	tls internal
+	reverse_proxy uptime-kuma:3001
+}
+
+# ==============================
+# INTERNAL UI (basic auth wajib)
+# ==============================
+
+https://{$PROMETHEUS_DOMAIN:prometheus.local} {
+	tls internal
+	basic_auth {
+		{$PROM_USER:admin} {$PROM_BCRYPT_HASH:JDJhJDEwJFZzd2U4M2x0N0ZkL0dFZWFhZ1oxUWV6TE1lTnRtNnhOZXFYUVc5S1lJY2U5Z2hMSWUwbW5h}
+	}
+	reverse_proxy prometheus:9090
+}
+
+https://{$ALERTS_DOMAIN:alerts.local} {
+	tls internal
+	basic_auth {
+		{$PROM_USER:admin} {$PROM_BCRYPT_HASH:JDJhJDEwJFZzd2U4M2x0N0ZkL0dFZWFhZ1oxUWV6TE1lTnRtNnhOZXFYUVc5S1lJY2U5Z2hMSWUwbW5h}
+	}
+	reverse_proxy alertmanager:9093
+}

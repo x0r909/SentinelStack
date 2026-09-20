@@ -1,0 +1,160 @@
+// SentinelStack - Grafana Alloy Configuration
+// Replaces Promtail: log collection from Docker containers + system logs
+// Docs: https://grafana.com/docs/alloy/
+
+// ============================================
+// LOKI CONNECTION
+// ============================================
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// ============================================
+// DISCOVERY: Docker containers
+// ============================================
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+}
+
+discovery.relabel "docker_containers" {
+  targets = discovery.docker.containers.targets
+
+  // Container name (strip leading slash)
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  // stdout/stderr stream
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  // Compose service label
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  // Mark host
+  rule {
+    target_label = "host"
+    replacement  = "monitoring-host"
+  }
+}
+
+// ============================================
+// DOCKER LOGS PIPELINE
+// ============================================
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.docker_containers.output
+  forward_to = [loki.process.docker.receiver]
+  labels     = { project = "sentinel-stack" }
+}
+
+loki.process "docker" {
+  // Parse level from common log formats
+  stage.match {
+    selector = "{service=~\"prometheus|alertmanager|grafana|loki|uptime-kuma\"}"
+
+    stage.regex {
+      expression = "^(?P<time>\\d{4}-\\d{2}-\\d{2}[T ].*?) (?P<level>[A-Z]+) (?P<message>.*)$"
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+
+    stage.timestamp {
+      source = "time"
+      format = "RFC3339"
+    }
+  }
+
+  stage.match {
+    selector = "{service!=\"\"}"
+
+    stage.logfmt {
+      mapping = { level = "level", msg = "msg", time = "time" }
+    }
+
+    stage.labels {
+      values = { level = "level" }
+    }
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+// ============================================
+// SYSTEM LOGS (/var/log)
+// ============================================
+
+loki.source.file "varlogs" {
+  targets = [
+    { __path__ = "/var/log/*log", job = "varlogs", host = "monitoring-host" },
+  ]
+  forward_to = [loki.process.syslog.receiver]
+  tail_from_end = false
+}
+
+loki.source.file "syslog" {
+  targets = [
+    { __path__ = "/var/log/syslog", job = "syslog", host = "monitoring-host" },
+  ]
+  forward_to = [loki.process.syslog.receiver]
+  tail_from_end = true
+}
+
+loki.source.file "authlog" {
+  targets = [
+    { __path__ = "/var/log/auth.log", job = "auth", host = "monitoring-host" },
+  ]
+  forward_to = [loki.process.syslog.receiver]
+  tail_from_end = true
+}
+
+loki.source.file "kernlog" {
+  targets = [
+    { __path__ = "/var/log/kern.log", job = "kernel", host = "monitoring-host" },
+  ]
+  forward_to = [loki.process.syslog.receiver]
+  tail_from_end = true
+}
+
+loki.process "syslog" {
+  // Parse classic syslog timestamp + program
+  stage.regex {
+    expression = "^(?P<timestamp>\\w+\\s+\\d+\\s+\\d+:\\d+:\\d+)\\s+(?P<sys_host>\\S+)\\s+(?P<program>\\S+?)(\\[(?P<pid>\\d+)\\])?:\\s+(?P<message>.*)$"
+  }
+
+  stage.labels {
+    values = {
+      host    = "sys_host",
+      program = "program",
+    }
+  }
+
+  stage.timestamp {
+    source   = "timestamp"
+    format   = "Jan 2 15:04:05"
+    location = "Local"
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+// ============================================
+// SELF-MONITORING
+// ============================================
+
+// Expose Alloy metrics on :12345/metrics (already default)

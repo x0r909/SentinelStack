@@ -1,0 +1,20 @@
+# Remote node exporters
+# Replace with your node IPs. Prometheus auto-reloads ~5s after saving.
+# Example: 192.168.1.10 is your Proxmox node-1, 192.168.1.11 is node-2
+- targets:
+    - '192.168.1.10:9100'
+  labels:
+    host_type: 'proxmox'
+    node_name: 'pve-1'
+
+- targets:
+    - '192.168.1.11:9100'
+  labels:
+    host_type: 'proxmox'
+    node_name: 'pve-2'
+
+- targets:
+    - '192.168.1.20:9100'
+  labels:
+    host_type: 'remote'
+    node_name: 'dokploy'

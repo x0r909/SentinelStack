@@ -1,0 +1,81 @@
+groups:
+  - name: sentinel-stack.service-alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: service
+        annotations:
+          summary: "Service {{ $labels.job }} down on {{ $labels.instance }}"
+          description: "{{ $labels.job }} has been unreachable for more than 2 minutes"
+
+      - alert: PrometheusTargetMissing
+        expr: count by(job) (up == 0) > 3
+        for: 5m
+        labels:
+          severity: warning
+          category: service
+        annotations:
+          summary: "Multiple targets down for {{ $labels.job }}"
+          description: "{{ $value }} targets are unreachable for job {{ $labels.job }}"
+
+      - alert: PrometheusTSDBCompactionsFailing
+        expr: increase(prometheus_tsdb_compactions_failed_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          category: service
+        annotations:
+          summary: "Prometheus TSDB compaction failing"
+          description: "Prometheus TSDB compaction has failed {{ $value }} times in the last hour"
+
+      - alert: AlertmanagerConfigFailed
+        expr: alertmanager_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: service
+        annotations:
+          summary: "Alertmanager configuration reload failed"
+          description: "Alertmanager failed to reload its configuration"
+
+      - alert: LokiConfigFailed
+        expr: loki_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: service
+        annotations:
+          summary: "Loki configuration reload failed"
+          description: "Loki failed to reload its configuration"
+
+      - alert: AlloyDown
+        expr: up{job="alloy"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          category: service
+        annotations:
+          summary: "Alloy collector down on {{ $labels.instance }}"
+          description: "Log collection may be interrupted"
+
+  # ============================================
+  # WATCHDOG (Dead man's switch)
+  # ============================================
+  # Alert ini SELALU firing. Kirim ke healthchecks.io eksternal:
+  # - Jika healthchecks.io berhenti menerima ping -> kirim notifikasi
+  # - Melindungi dari kondisi "monitoring stack down = tidak ada yang alert"
+  # Setup: buat check di https://healthchecks.io, tambahkan route receiver
+  # "deadman" di alertmanager dengan url healthchecks.io ping endpoint.
+  - name: sentinel-stack.watchdog
+    rules:
+      - alert: Watchdog
+        expr: vector(1)
+        labels:
+          severity: none
+          category: watchdog
+        annotations:
+          summary: "Watchdog heartbeat - monitoring stack is alive"
+          description: "This alert is always firing. It is routed to healthchecks.io as a dead man's switch."

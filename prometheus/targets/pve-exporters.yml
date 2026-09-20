@@ -1,0 +1,13 @@
+# Proxmox nodes (PVE Exporter targets)
+# Replace with your Proxmox node IPs. Prometheus auto-reloads ~5s after saving.
+- targets:
+    - '192.168.1.10'
+  labels:
+    host_type: 'proxmox'
+    node_name: 'pve-1'
+
+- targets:
+    - '192.168.1.11'
+  labels:
+    host_type: 'proxmox'
+    node_name: 'pve-2'
