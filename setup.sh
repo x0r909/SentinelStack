@@ -37,14 +37,23 @@ setup_env() {
 
 create_directories() {
     echo "Creating required directories..."
-    mkdir -p "$SCRIPT_DIR/prometheus"
+    mkdir -p "$SCRIPT_DIR/prometheus/targets"
+    mkdir -p "$SCRIPT_DIR/prometheus/rules"
     mkdir -p "$SCRIPT_DIR/alertmanager"
     mkdir -p "$SCRIPT_DIR/loki"
-    mkdir -p "$SCRIPT_DIR/promtail"
+    mkdir -p "$SCRIPT_DIR/alloy"
+    mkdir -p "$SCRIPT_DIR/caddy"
+    mkdir -p "$SCRIPT_DIR/tempo"
     mkdir -p "$SCRIPT_DIR/grafana/provisioning/datasources"
     mkdir -p "$SCRIPT_DIR/grafana/provisioning/dashboards"
     mkdir -p "$SCRIPT_DIR/grafana/dashboards"
     echo "✓ Directories created"
+}
+
+render_configs() {
+    echo "Rendering configs (inject secrets from .env)..."
+    "$SCRIPT_DIR/scripts/render-configs.sh"
+    echo "✓ Configs rendered"
 }
 
 pull_images() {
@@ -95,6 +104,7 @@ main() {
     check_requirements
     setup_env
     create_directories
+    render_configs
     pull_images
     start_stack
     show_status

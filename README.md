@@ -1,521 +1,288 @@
-# 🛡️ SentinelStack
+<div align="center">
 
-**All-in-One System Monitoring & Uptime Platform**
+```
+███████╗███████╗███╗   ██╗████████╗██╗███╗   ██╗███████╗██╗
+██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║
+███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║
+╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║
+███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
+╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
+███████╗████████╗ █████╗  ██████╗██╗  ██╗
+██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝
+███████╗   ██║   ███████║██║     █████╔╝
+╚════██║   ██║   ██╔══██║██║     ██╔═██╗
+███████║   ██║   ██║  ██║╚██████╗██║  ██╗
+╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+```
 
-Unified monitoring solution untuk Proxmox cluster, Docker containers, dan infrastructure logs dengan alerting ke Telegram.
+**All-in-one monitoring & uptime platform for Proxmox, Docker, and Linux servers.**
 
-> **Production-ready monitoring stack** with auto-discovery, centralized logging, real-time alerting, and pre-built dashboards.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Compose-blue?logo=docker)](https://docs.docker.com/compose/)
+[![Grafana](https://img.shields.io/badge/Grafana-11.x-orange?logo=grafana)](https://grafana.com/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-2.54-red?logo=prometheus)](https://prometheus.io/)
+
+</div>
 
 ---
 
-## 📋 Features
+## ✨ Features
 
-- ✅ **Full Proxmox Monitoring** — Cluster health, VM/LXC status, storage, CPU/RAM per node
-- ✅ **Docker Container Metrics** — Auto-discover semua containers, resource usage, restart tracking
-- ✅ **System Metrics** — CPU, RAM, disk, network untuk semua nodes
-- ✅ **Centralized Logs** — Aggregasi logs dari Docker, Proxmox, dan system logs (30 hari retention)
-- ✅ **Alerting** — 20+ alert rules ke Telegram (CPU high, disk full, service down, dll)
-- ✅ **Uptime Monitoring** — Status page untuk semua services
-- ✅ **Pre-built Dashboards** — 4 Grafana dashboards siap pakai
+- 📊 **Proxmox Monitoring** — Cluster health, VM/LXC status, storage, CPU/RAM per node
+- 🐳 **Docker Metrics** — Auto-discover all containers, resource usage, restart tracking
+- 🖥️ **System Metrics** — CPU, RAM, disk, network for all nodes
+- 📋 **Centralized Logs** — Grafana Alloy → Loki (30-day retention)
+- 🔍 **Distributed Tracing** — Tempo + OTLP receiver (7-day retention)
+- 🚨 **Alerting** — 30+ alert rules → Telegram, including Watchdog dead man's switch
+- 📈 **Uptime Monitoring** — Status page for all services via Uptime Kuma
+- 🔒 **Reverse Proxy** — Caddy with auto TLS + basic auth for Prometheus/Alertmanager
+- 🔐 **Secret Management** — Credentials in `.env`, rendered via templates (never committed)
+- ⚡ **File-based SD** — Add nodes by editing `prometheus/targets/*.yml` (no restart)
+- 📦 **Pre-built Dashboards** — Grafana dashboards ready to use
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SentinelStack (LXC/VM)                        │
-│  ┌───────────┐ ┌──────────┐ ┌─────────┐ ┌───────────────────┐  │
-│  │  Grafana   │ │Prometheus│ │  Loki   │ │  Uptime Kuma      │  │
-│  │ :3000     │ │ :9090    │ │ :3100   │ │  :3001            │  │
-│  └─────┬─────┘ └────┬─────┘ └────┬────┘ └────────┬──────────┘  │
-│        │             │            │                │             │
-│  ┌─────┴─────┐  ┌───┴────┐  ┌───┴────┐   ┌──────┴──────┐     │
-│  │Alertmanager│ │cAdvisor│  │Promtail│   │Telegram Bot │     │
-│  │  :9093     │ │ :8080  │  │        │   │             │     │
-│  └────────────┘ └────────┘  └────────┘   └─────────────┘     │
-└─────────────────────────────────────────────────────────────────┘
+                    ┌──────────────────────────────────────────────┐
+                    │            Caddy (reverse proxy)             │
+                    │   TLS internal + basic auth (prom/alerts)    │
+                    └───────┬──────────┬──────────┬───────────────┘
+                            │          │          │
+┌───────────────────────────┴──────────┴──────────┴───────────────────────────┐
+│                      sentinel-frontend network                              │
+│  ┌───────────┐ ┌──────────┐ ┌─────────┐ ┌──────────────┐ ┌──────────────┐   │
+│  │  Grafana  │ │Prometheus│ │  Loki   │ │ Alertmanager │ │ Uptime Kuma  │   │
+│  │   :3000   │ │  :9090   │ │  :3100  │ │    :9093     │ │    :3001     │   │
+│  └───────────┘ └──────────┘ └─────────┘ └──────────────┘ └──────────────┘   │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                      sentinel-backend network                               │
+│  ┌───────┐ ┌────────┐ ┌──────────────┐ ┌─────────────────────────────────┐  │
+│  │ Tempo │ │  Alloy │ │ pve-exporter │ │ blackbox / cadvisor / node-exp  │  │
+│  │ :3200 │ │ :12345 │ │    :9221     │ │       (sentinel-exporters)      │  │
+│  └───────┘ └────────┘ └──────────────┘ └─────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
          ▲                    ▲                    ▲
-         │                    │                    │
     ┌────┴────┐         ┌────┴────┐         ┌────┴────┐
-    │Proxmox 1│         │Proxmox 2│         │Dokploy  │
-    │(agent)  │         │(agent)  │         │(agent)  │
-    └─────────┘         └─────────┘         └─────────┘
+    │Proxmox 1│         │Proxmox 2│         │ Docker  │
+    │(systemd │         │(systemd │         │  Host   │
+    │ agent)  │         │ agent)  │         │(Alloy   │
+    └─────────┘         └─────────┘         │container)│
+                                            └─────────┘
 ```
+
+**Network segmentation:**
+
+| Network | Purpose |
+|---------|---------|
+| `sentinel-frontend` | Services accessible via Caddy |
+| `sentinel-backend` | Internal service communication |
+| `sentinel-exporters` | `internal: true` — no internet access |
 
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- Docker & Docker Compose v2+
-- LXC/VM dengan 4 core CPU, 8GB RAM, 50-100GB disk
-- Access ke Proxmox API
-- Telegram bot token (dari @BotFather)
-
 ### 1. Clone & Configure
 
 ```bash
-git clone <repo-url> /opt/sentinel-stack
+git clone https://github.com/YOUR_USERNAME/sentinel-stack.git /opt/sentinel-stack
 cd /opt/sentinel-stack
 
-# Copy and edit environment variables
 cp .env.example .env
 nano .env
 ```
 
-**Required values to configure:**
-- `GRAFANA_ADMIN_PASSWORD` — Set your Grafana admin password
-- `PVE_NODE1_IP` / `PVE_NODE2_IP` — Your Proxmox nodes IP addresses
-- `PVE_PASSWORD` — Proxmox API password
-- `DOKPLOY_IP` — Your Dokploy server IP
-- `TELEGRAM_BOT_TOKEN` — Get from @BotFather on Telegram
-- `TELEGRAM_CHAT_ID` — Get from @userinfobot on Telegram
+Fill in the required values — see [Configuration Reference](docs/configuration.md).
 
-### 2. Update Configuration Files
+### 2. Add Your Nodes
 
-```bash
-# Update Prometheus targets with your IPs
-sed -i 's/PROXMOX_NODE1_IP/YOUR_PVE_NODE1_IP/g' prometheus/prometheus.yml
-sed -i 's/PROXMOX_NODE2_IP/YOUR_PVE_NODE2_IP/g' prometheus/prometheus.yml
-sed -i 's/DOKPLOY_IP/YOUR_DOKPLOY_IP/g' prometheus/prometheus.yml
+Edit `prometheus/targets/*.yml` with your node IPs:
 
-# Update Alertmanager with Telegram credentials
-sed -i "s/TELEGRAM_BOT_TOKEN/YOUR_BOT_TOKEN/g" alertmanager/alertmanager.yml
-sed -i "s/TELEGRAM_CHAT_ID/YOUR_CHAT_ID/g" alertmanager/alertmanager.yml
+```yaml
+# prometheus/targets/node-exporters.yml
+- targets: ['192.168.1.10:9100']
+  labels:
+    host_type: 'proxmox'
+    node_name: 'pve-1'
 ```
 
-### 3. Deploy Main Stack
+### 3. Deploy
 
 ```bash
-# Interactive deployment (recommended)
-./deploy.sh
-# Select option 1: Deploy Main Stack
-
-# Or manual deployment
-docker compose up -d
+./scripts/render-configs.sh   # inject secrets into config templates
+./deploy.sh                   # interactive deployment
 ```
 
-### 4. Deploy Agents to Remote Nodes
+Or one-shot:
 
-**For Proxmox nodes:**
 ```bash
-# Transfer files to Proxmox node
-scp -r agents/proxmox-node/* root@PROXMOX_IP:/opt/sentinel-agent/
-
-# SSH to node
-ssh root@PROXMOX_IP
-cd /opt/sentinel-agent
-
-# Configure agent
-cp .env.example .env
-nano .env  # Set LOKI_URL and NODE_HOSTNAME
-
-# Start agent
-docker compose up -d
+./setup.sh
 ```
 
-**For Dokploy server:**
-```bash
-# Transfer files to Dokploy server
-scp -r agents/dokploy-node/* root@DOKPLOY_IP:/opt/sentinel-agent/
+### 4. Access
 
-# SSH to server
-ssh root@DOKPLOY_IP
-cd /opt/sentinel-agent
-
-# Configure agent
-cp .env.example .env
-nano .env  # Set LOKI_URL and NODE_HOSTNAME
-
-# Start agent
-docker compose up -d
-```
-
-### 5. Verify Deployment
-
-- **Prometheus Targets:** `http://YOUR_MONITORING_IP:9090/targets` (all should be UP)
-- **Grafana Dashboards:** `http://YOUR_MONITORING_IP:3000`
-- **Test Telegram Alert:** Run `./deploy.sh` → option 3
-
-> 📖 **For detailed step-by-step guide, see:** [DEPLOYMENT.md](DEPLOYMENT.md)
+| Service | URL |
+|---------|-----|
+| Grafana | `http://<SERVER_IP>:3000` |
+| Uptime Kuma | `http://<SERVER_IP>:3001` |
+| Prometheus | `https://<PROMETHEUS_DOMAIN>` |
+| Alertmanager | `https://<ALERTS_DOMAIN>` |
 
 ---
 
-## 🎯 Access Points
+## 📖 Documentation
 
-| Service | URL | Default Port | Credentials |
-|---------|-----|--------------|-------------|
-| **Grafana** | `http://MONITORING_IP:3000` | 3000 | admin / (from .env) |
-| **Prometheus** | `http://MONITORING_IP:9090` | 9090 | - |
-| **Alertmanager** | `http://MONITORING_IP:9093` | 9093 | - |
-| **Uptime Kuma** | `http://MONITORING_IP:3001` | 3001 | (setup on first login) |
-| **Loki** | `http://MONITORING_IP:3100` | 3100 | - |
-| **Status Page** | `http://MONITORING_IP:3001/status/<slug>` | - | Public (configured via Uptime Kuma) |
-
----
-
-## 📊 Dashboards
-
-Pre-built Grafana dashboards di folder **SentinelStack**:
-
-1. **Proxmox Cluster Overview**
-   - Cluster nodes count, VM/LXC status
-   - CPU/Memory usage per node
-   - Storage usage per pool
-
-2. **Docker Container Overview**
-   - Running/stopped containers
-   - CPU/Memory per container
-   - Network I/O
-   - Restart count
-
-3. **Node System Overview**
-   - System metrics (CPU, RAM, disk, network)
-   - Load average
-   - Disk I/O
-
-4. **Logs Explorer**
-   - Unified log search
-   - Error analysis
-   - Container logs viewer
+| Guide | Description |
+|-------|-------------|
+| [Deployment Guide](docs/deployment.md) | Full step-by-step deployment |
+| [Agent Setup](docs/agents.md) | Install agents on Proxmox / Docker hosts |
+| [Configuration Reference](docs/configuration.md) | All `.env` variables explained |
+| [Uptime Kuma Setup](docs/uptime-kuma.md) | Uptime monitoring + status page |
 
 ---
 
 ## 🔔 Alert Rules
 
-### Node Alerts
-- High CPU (>85%)
-- Critical CPU (>95%)
-- High Memory (>85%)
-- Critical Memory (>95%)
-- Disk Space Warning (>85%)
-- Disk Space Critical (>95%)
-- High Load Average
+All rules live in `prometheus/rules/` — modular by category:
 
-### Proxmox Alerts
-- Node Offline
-- VM/LXC Down
-- High CPU/Memory
-- Storage Critical (>90%)
+| File | Category | Highlights |
+|------|----------|-----------|
+| `node.yml` | Node | CPU/memory/disk/load warnings + critical |
+| `proxmox.yml` | Proxmox | Node offline, VM/LXC down, storage critical |
+| `docker.yml` | Docker | Container CPU/memory/restart loop |
+| `service.yml` | Service | Service down, config reload failed, **Watchdog** |
+| `storage.yml` | Storage + v2.0 | TSDB limits, **SSL cert expiry**, **OOM kill**, **host reboot**, **network saturation**, **probe failure**, **Tempo errors** |
 
-### Docker Alerts
-- Container Down
-- Container High CPU (>80%)
-- Container High Memory (>85%)
-- Container Restart Loop (>5 restarts/hour)
+### Watchdog (Dead Man's Switch)
 
-### Service Alerts
-- Service Down (>2 min)
-- Multiple Targets Missing
-- Prometheus Compaction Failed
-- Alertmanager Config Failed
+The `Watchdog` alert always fires. Route it to [healthchecks.io](https://healthchecks.io) — if the ping stops, healthchecks.io notifies you. This protects against the monitoring stack itself going down silently.
+
+See [deployment.md](docs/deployment.md#step-9--setup-watchdog-dead-mans-switch) for setup.
 
 ---
 
 ## 🛠️ Maintenance
 
-### Check Status
 ```bash
-cd /opt/sentinel-stack
+# Check status
 docker compose ps
-docker compose logs -f
-```
 
-### Restart Service
-```bash
-docker compose restart grafana
-docker compose restart prometheus
-```
+# Reload Prometheus config (no restart)
+docker compose exec prometheus kill -HUP 1
 
-### Update Stack
-```bash
-docker compose pull
-docker compose up -d
-```
+# Backup (configs + volumes, 7-day retention)
+./scripts/backup.sh /backup
 
-### Stop Stack
-```bash
-docker compose down
-```
-
-### Backup Config
-```bash
-tar -czf sentinel-backup-$(date +%Y%m%d).tar.gz \
-  .env prometheus/ alertmanager/ loki/ promtail/ grafana/
+# Update stack
+docker compose pull && docker compose up -d
 ```
 
 ---
 
-## 📝 Project Structure
+## 📁 Project Structure
 
 ```
-monitoring-system/
-├── docker-compose.yml              # Main stack (9 services)
-├── .env.example                    # Environment template
-├── .gitignore                      # Ignore secrets & runtime data
-├── README.md                       # This file
-├── DEPLOYMENT.md                   # Step-by-step deployment guide
-├── setup.sh                        # Interactive setup script
-├── deploy.sh                       # Automated deployment helper
+sentinel-stack/
+├── docker-compose.yml          # Main stack (12 services, 3 networks)
+├── .env.example                # Environment template
+├── setup.sh                    # One-shot setup
+├── deploy.sh                   # Interactive deployment helper
+├── caddy/
+│   └── Caddyfile               # Reverse proxy, TLS, basic auth
 ├── prometheus/
-│   ├── prometheus.yml              # Scrape config (update with your IPs)
-│   └── alert-rules.yml             # 20+ alert rules
+│   ├── prometheus.yml          # Scrape config (file_sd)
+│   ├── targets/                # ← Add nodes here
+│   │   ├── pve-exporters.yml
+│   │   ├── node-exporters.yml
+│   │   └── cadvisor-remote.yml
+│   └── rules/                  # Alert rules (modular)
 ├── alertmanager/
-│   └── alertmanager.yml            # Telegram alerting (update credentials)
-├── loki/
-│   └── loki-config.yml             # Log storage (30d retention)
-├── promtail/
-│   └── promtail-config.yml         # Log collection
+│   ├── alertmanager.yml.tmpl   # Template (secrets via ${VAR})
+│   └── alertmanager.yml        # Rendered (gitignored)
+├── loki/loki-config.yml        # Log storage (30d)
+├── alloy/config.alloy          # Log collector
+├── tempo/tempo.yml             # Tracing backend (7d)
 ├── grafana/
-│   ├── provisioning/               # Auto-provision datasources
-│   └── dashboards/                 # 4 pre-built dashboards
-└── agents/
-    ├── proxmox-node/               # Agent for Proxmox nodes
-    │   ├── docker-compose.yml
-    │   ├── .env.example            # Configure per node
-    │   └── promtail-config.yml
-    └── dokploy-node/               # Agent for Dokploy server
-        ├── docker-compose.yml
-        ├── .env.example            # Configure for your server
-        └── promtail-config.yml
-```
-
-**Configuration required:**
-- Update `.env` with your infrastructure details
-- Update `prometheus/prometheus.yml` with your node IPs
-- Update `alertmanager/alertmanager.yml` with Telegram credentials
-- Configure agent `.env` files for each remote node
-
----
-
-## 🔧 Troubleshooting
-
-### Prometheus Target DOWN
-```bash
-# Check firewall on remote node
-ufw allow from MONITORING_IP to any port 9100
-ufw allow from MONITORING_IP to any port 8080
-
-# Test from monitoring server
-curl http://REMOTE_NODE_IP:9100/metrics
-telnet REMOTE_NODE_IP 9100
-```
-
-### PVE Exporter Error
-```bash
-# Test Proxmox API access
-curl -k https://PROXMOX_IP:8006/api2/json/version \
-  -u 'root@pam:YOUR_PASSWORD'
-
-# Check .env configuration
-cat .env | grep PVE_PASSWORD
-```
-
-### No Telegram Alerts
-```bash
-# Test manual alert (automated via deploy.sh)
-./deploy.sh
-# Select option 3: Test Telegram Alert
-
-# Or manual test
-curl -X POST http://localhost:9093/api/v1/alerts \
-  -H "Content-Type: application/json" \
-  -d '[{
-    "status": "firing",
-    "labels": {"alertname": "Test", "severity": "critical"},
-    "annotations": {"summary": "Test alert"}
-  }]'
-
-# Check alertmanager configuration
-cat alertmanager/alertmanager.yml | grep -A2 bot_token
-
-# Check logs
-docker compose logs alertmanager --tail 50
-```
-
-### Loki No Data
-```bash
-# Check Promtail on monitoring server
-docker compose logs promtail --tail 50
-
-# Test Loki API
-curl http://localhost:3100/ready
-
-# Verify agent Promtail on remote nodes
-ssh root@REMOTE_NODE_IP
-cd /opt/sentinel-agent
-docker compose ps
-docker compose logs promtail
-```
-
-### Container Restart Loop
-```bash
-# Check logs
-docker compose logs <service> --tail 100
-
-# Check resources
-docker stats
-
-# Common services to check
-docker compose logs grafana --tail 100
-docker compose logs prometheus --tail 100
-docker compose logs loki --tail 100
-```
-
-### Agent Not Sending Metrics
-```bash
-# On remote node, verify agent running
-docker compose ps
-
-# Test Node Exporter locally on remote node
-curl http://localhost:9100/metrics | head -20
-
-# Test from monitoring server
-curl http://REMOTE_NODE_IP:9100/metrics
-
-# Check Prometheus targets page
-# Open: http://MONITORING_IP:9090/targets
+│   ├── provisioning/datasources/
+│   └── dashboards/
+├── scripts/
+│   ├── render-configs.sh       # Render templates with secrets
+│   ├── backup.sh               # Config + volume backup
+│   └── setup-uptime-kuma-monitors.sh
+├── agents/
+│   ├── proxmox-node/           # systemd installer
+│   └── dokploy-node/           # Docker Compose agent
+└── docs/
+    ├── deployment.md
+    ├── agents.md
+    ├── configuration.md
+    └── uptime-kuma.md
 ```
 
 ---
 
-## 🔐 Security Recommendations
+## 🖥️ Resource Requirements
 
-1. **Update Default Credentials**
-   - Set strong `GRAFANA_ADMIN_PASSWORD` in `.env`
-   - Create dedicated Proxmox monitoring user (recommended over root):
-     ```
-     Datacenter → Permissions → Users → Add
-     User: monitoring@pve
-     Role: PVEAuditor (read-only)
-     
-     Then update .env:
-     PVE_USER=monitoring@pve
-     PVE_PASSWORD=strong_monitoring_password
-     ```
+### Monitoring Server
 
-2. **Firewall Configuration**
-   ```bash
-   # On monitoring server
-   ufw allow 3000/tcp comment 'Grafana'
-   ufw allow 9090/tcp comment 'Prometheus'
-   ufw allow 3001/tcp comment 'Uptime Kuma'
-   
-   # On remote nodes (restrict to monitoring server IP only)
-   ufw allow from MONITORING_SERVER_IP to any port 9100 comment 'Node Exporter'
-   ufw allow from MONITORING_SERVER_IP to any port 8080 comment 'cAdvisor'
-   ```
+| Resource | Minimum |
+|----------|---------|
+| CPU | 4 cores |
+| RAM | 8 GB |
+| Disk | 50–100 GB |
+| OS | Ubuntu 22.04/24.04, Debian 11/12 |
 
-3. **Reverse Proxy Setup (Optional)**
-   ```nginx
-   # /etc/nginx/sites-available/monitoring
-   server {
-       listen 80;
-       server_name monitoring.yourdomain.com;
-       
-       location / {
-           proxy_pass http://127.0.0.1:3000;
-           proxy_set_header Host $host;
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header X-Forwarded-Proto $scheme;
-       }
-   }
-   ```
+### Per Agent Node
 
-4. **Enable SSL/TLS (Recommended for Production)**
-   ```bash
-   # Using Let's Encrypt with Certbot
-   apt install certbot python3-certbot-nginx
-   certbot --nginx -d monitoring.yourdomain.com
-   
-   # Auto-renewal is handled by systemd timer
-   systemctl status certbot.timer
-   ```
-
-5. **Backup Strategy**
-   ```bash
-   # Automated daily backup (add to crontab)
-   0 2 * * * cd /opt/sentinel-stack && tar -czf /backup/sentinel-$(date +\%Y\%m\%d).tar.gz .env prometheus/ alertmanager/ loki/ promtail/ grafana/
-   
-   # Keep last 7 days only
-   0 3 * * * find /backup/sentinel-*.tar.gz -mtime +7 -delete
-   ```
-
-6. **Network Segmentation**
-   - Place monitoring server on management VLAN
-   - Use separate network for monitoring traffic
-   - Limit external access to Grafana only
+| Resource | Minimum |
+|----------|---------|
+| CPU | 0.5 core |
+| RAM | 512 MB |
+| Ports | 9100 (node_exporter), 8080 (cAdvisor) |
 
 ---
 
-## 📈 Resource Requirements
+## 🔐 Security Model
 
-### Main Stack (Monitoring Server)
-- CPU: 4 cores
-- RAM: 8 GB
-- Disk: 50-100 GB
-- OS: Ubuntu 22.04/24.04, Debian 11/12
+1. **Secrets never in git** — all credentials in `.env` (gitignored), rendered via `scripts/render-configs.sh`
+2. **No exposed internal ports** — only Caddy, Grafana, Uptime Kuma listen on the host
+3. **Basic auth** for Prometheus & Alertmanager via Caddy
+4. **TLS internal** auto-generated for all domains via Caddy
+5. **Network segmentation** — exporters isolated (`internal: true`)
+6. **Dedicated PVE user** — `monitoring@pve` with `PVEAuditor` role (not root)
+7. **Watchdog** — detects if the monitoring stack itself goes down
 
-### Agents (Per Node)
-- CPU: 0.5-1 core
-- RAM: 512 MB - 1 GB
-- Disk: 1 GB
-- Ports: 9100 (Node Exporter), 8080 (cAdvisor - Dokploy only)
+---
+
+## 📦 Stack Components
+
+| Component | Version | Purpose |
+|-----------|---------|---------|
+| Grafana | 11.2 | Visualization & dashboards |
+| Prometheus | 2.54 | Metrics collection (30d) |
+| Alertmanager | 0.27 | Alert routing & deduplication |
+| Loki | 3.1 | Log aggregation (30d) |
+| Grafana Alloy | 0.2 | Telemetry collector |
+| Tempo | 2.6 | Distributed tracing (7d) |
+| Caddy | 2.8 | Reverse proxy + TLS |
+| Uptime Kuma | 1.23 | Uptime monitoring & status pages |
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! Please:
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Test your changes locally
-4. Commit with clear messages (`git commit -m 'Add amazing feature'`)
-5. Push to your branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
+Contributions are welcome! Please open an issue first to discuss what you'd like to change.
+
+1. Fork the repo
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Commit your changes (`git commit -m 'Add my feature'`)
+4. Push (`git push origin feature/my-feature`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-MIT License - feel free to use and modify for your infrastructure.
-
----
-
-## 🆘 Support & Documentation
-
-- **Full Deployment Guide:** [DEPLOYMENT.md](DEPLOYMENT.md)
-- **Issues & Questions:** Open an issue on GitHub
-- **Feature Requests:** Submit via GitHub issues
-
----
-
-## 📊 Monitoring Infrastructure
-
-This stack is designed to monitor:
-- ✅ Multiple Proxmox nodes in a cluster
-- ✅ Dokploy server with all Docker containers
-- ✅ System metrics (CPU, RAM, disk, network) from all nodes
-- ✅ Centralized logs with 30-day retention
-- ✅ Real-time alerts via Telegram
-- ✅ Public status page for service availability
-
-**Stack Components:**
-- **Grafana** — Visualization and dashboards
-- **Prometheus** — Metrics collection and storage (30d)
-- **Alertmanager** — Alert routing and deduplication
-- **Loki** — Log aggregation and storage (30d)
-- **Promtail** — Log shipper
-- **Uptime Kuma** — Uptime monitoring and status pages
-- **Node Exporter** — System-level metrics
-- **cAdvisor** — Container-level metrics
-- **PVE Exporter** — Proxmox API metrics
-
----
-
-**Built with ❤️ for infrastructure monitoring**
-
-*SentinelStack — Production-ready monitoring for Proxmox, Docker, and beyond*
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.

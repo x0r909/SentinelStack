@@ -49,7 +49,7 @@
             "type": "loki",
             "uid": "${datasource}"
           },
-          "expr": "sum by (level) (count_over_time({service=~\"$service\"} |~ \"$search\" [$__interval]))",
+          "expr": "sum by (level) (count_over_time({job=~\"$job\"} |~ \"$search\" [$__interval]))",
           "refId": "A"
         }
       ],
@@ -84,7 +84,7 @@
             "type": "loki",
             "uid": "${datasource}"
           },
-          "expr": "{service=~\"$service\", level=~\"$level\"} |~ \"$search\"",
+          "expr": "{job=~\"$job\"} |~ \"$search\"",
           "refId": "A"
         }
       ],
@@ -219,7 +219,7 @@
             "type": "loki",
             "uid": "${datasource}"
           },
-          "expr": "sum by (level) (count_over_time({service=~\"$service\", level=~\"error|warning\"} [$__interval]))",
+          "expr": "sum by (level) (count_over_time({job=~\"$job\", level=~\"error|warning\"} [$__interval]))",
           "legendFormat": "{{level}}",
           "refId": "A"
         }
@@ -291,8 +291,8 @@
             "type": "loki",
             "uid": "${datasource}"
           },
-          "expr": "sum by (service) (count_over_time({service=~\"$service\", level=\"error\"} [$__range]))",
-          "legendFormat": "{{service}}",
+          "expr": "sum by (job) (count_over_time({job=~\"$job\", level=\"error\"} [$__range]))",
+          "legendFormat": "{{job}}",
           "refId": "A"
         }
       ],
@@ -376,7 +376,7 @@
         "type": "datasource"
       },
       {
-        "allValue": ".*",
+        "allValue": ".+",
         "current": {
           "selected": true,
           "text": "All",
@@ -386,14 +386,14 @@
           "type": "loki",
           "uid": "${datasource}"
         },
-        "definition": "label_values({service!=\"\"}, service)",
+        "definition": "label_values({job=~\".+\"}, job)",
         "hide": 0,
         "includeAll": true,
-        "label": "Service",
+        "label": "Job",
         "multi": true,
-        "name": "service",
+        "name": "job",
         "options": [],
-        "query": "label_values({service!=\"\"}, service)",
+        "query": "label_values({job=~\".+\"}, job)",
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
@@ -401,7 +401,7 @@
         "type": "query"
       },
       {
-        "allValue": ".*",
+        "allValue": ".+",
         "current": {
           "selected": true,
           "text": "All",
@@ -426,7 +426,7 @@
         "type": "query"
       },
       {
-        "allValue": ".*",
+        "allValue": ".+",
         "current": {
           "selected": true,
           "text": "All",

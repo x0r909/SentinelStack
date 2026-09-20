@@ -73,7 +73,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(count(container_memory_usage_bytes{name!=\"\"}) by (name))",
+          "expr": "count(container_memory_usage_bytes{name!=\"\",id=~\"/system.slice/docker.*\"})",
           "refId": "A"
         }
       ],
@@ -132,7 +132,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(container_tasks_state{state=\"running\"} > 0)",
+          "expr": "count(container_memory_usage_bytes{name!=\"\",id=~\"/system.slice/docker.*\"})",
           "refId": "A"
         }
       ],
@@ -158,12 +158,16 @@
                 "value": null
               },
               {
+                "color": "yellow",
+                "value": 2147483648
+              },
+              {
                 "color": "red",
-                "value": 1
+                "value": 4294967296
               }
             ]
           },
-          "unit": "none"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -195,11 +199,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(container_tasks_state{state=\"running\"} == 0)",
+          "expr": "sum(container_memory_usage_bytes{name!=\"\",id=~\"/system.slice/docker.*\"})",
           "refId": "A"
         }
       ],
-      "title": "Stopped Containers",
+      "title": "Total Memory Usage",
       "type": "stat"
     },
     {
@@ -222,15 +226,15 @@
               },
               {
                 "color": "yellow",
-                "value": 1
+                "value": 50
               },
               {
                 "color": "red",
-                "value": 5
+                "value": 80
               }
             ]
           },
-          "unit": "none"
+          "unit": "percent"
         },
         "overrides": []
       },
@@ -262,11 +266,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(increase(container_restart_count[1h]))",
+          "expr": "sum(rate(container_cpu_usage_seconds_total{name!=\"\",id=~\"/system.slice/docker.*\"}[5m])) * 100",
           "refId": "A"
         }
       ],
-      "title": "Restarts (1h)",
+      "title": "Total CPU Usage",
       "type": "stat"
     },
     {
@@ -368,7 +372,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(container_cpu_usage_seconds_total{name!=\"\"}[5m])) by (name)",
+          "expr": "rate(container_cpu_usage_seconds_total{name!=\"\",id=~\"/system.slice/docker.*\"}[5m]) * 100",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
@@ -462,7 +466,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "container_memory_usage_bytes{name!=\"\"}",
+          "expr": "container_memory_usage_bytes{name!=\"\",id=~\"/system.slice/docker.*\"}",
           "legendFormat": "{{name}}",
           "refId": "A"
         }
@@ -600,7 +604,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(container_network_receive_bytes_total{name!=\"\"}[5m])) by (name)",
+          "expr": "rate(container_network_receive_bytes_total{name!=\"\",id=~\"/system.slice/docker.*\"}[5m])",
           "legendFormat": "{{name}} - rx",
           "refId": "A"
         },
@@ -609,7 +613,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(container_network_transmit_bytes_total{name!=\"\"}[5m])) by (name)",
+          "expr": "rate(container_network_transmit_bytes_total{name!=\"\",id=~\"/system.slice/docker.*\"}[5m])",
           "legendFormat": "{{name}} - tx",
           "refId": "B"
         }

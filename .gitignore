@@ -9,6 +9,9 @@ agents/*/.env.pve
 agents/*/.env.pve-1
 agents/*/.env.dokploy
 
+# Rendered configs (contain secrets — do NOT commit)
+alertmanager/alertmanager.yml
+
 # Docker volumes data
 grafana_data/
 prometheus_data/
@@ -19,8 +22,7 @@ uptime_kuma_data/
 # Grafana runtime
 grafana/provisioning/notifiers/
 
-# Promtail positions
-promtail/positions.yaml
+# Promtail positions (legacy)
 agents/*/positions.yaml
 
 # Temporary files
@@ -48,3 +50,5 @@ sentinel-backup-*.tar.gz
 
 # Docker
 docker-compose.override.yml
+# Data backups
+backups/

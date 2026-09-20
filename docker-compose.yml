@@ -1,18 +1,53 @@
-x-default-limits: &default-limits
-  cpus: '1.0'
-  mem_limit: 1g
+name: sentinel-stack
 
 services:
+  # ========================================
+  # REVERSE PROXY (TLS + basic auth)
+  # ========================================
+  caddy:
+    image: caddy:2.8.4
+    container_name: sentinel-caddy
+    restart: unless-stopped
+    ports:
+      - "${CADDY_HTTP_PORT:-80}:80"
+      - "${CADDY_HTTPS_PORT:-443}:443"
+    environment:
+      - GRAFANA_DOMAIN=${GRAFANA_DOMAIN:-grafana.local}
+      - KUMA_DOMAIN=${KUMA_DOMAIN:-status.local}
+      - PROMETHEUS_DOMAIN=${PROMETHEUS_DOMAIN:-prometheus.local}
+      - ALERTS_DOMAIN=${ALERTS_DOMAIN:-alerts.local}
+      - PROM_USER=${PROM_USER:-admin}
+      - PROM_BCRYPT_HASH=${PROM_BCRYPT_HASH}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - sentinel-frontend
+      - sentinel-backend
+    healthcheck:
+      test: ["CMD", "caddy", "validate", "--config", "/etc/caddy/Caddyfile"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    cpus: '0.5'
+    mem_limit: 256m
+
+  # ========================================
+  # VISUALIZATION
+  # ========================================
   grafana:
     image: grafana/grafana:11.2.2
     container_name: sentinel-grafana
     restart: unless-stopped
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
+    expose:
+      - "3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-sentinel2024}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3000}
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-piechart-panel
     volumes:
@@ -20,23 +55,31 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
-      - sentinel-net
+      - sentinel-frontend
+      - sentinel-backend
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    <<: *default-limits
+      start_period: 30s
+    cpus: '1.0'
+    mem_limit: 1g
 
+  # ========================================
+  # METRICS
+  # ========================================
   prometheus:
     image: prom/prometheus:v2.54.1
     container_name: sentinel-prometheus
     restart: unless-stopped
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+    expose:
+      - "9090"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -45,102 +88,158 @@ services:
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
     volumes:
       - prometheus_data:/prometheus
       - ./prometheus:/etc/prometheus:ro
     networks:
-      - sentinel-net
+      - sentinel-backend
+      - sentinel-exporters
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    <<: *default-limits
+      start_period: 30s
+    cpus: '1.5'
+    mem_limit: 2g
 
+  # ========================================
+  # ALERTING
+  # ========================================
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: sentinel-alertmanager
     restart: unless-stopped
-    ports:
-      - "${ALERTMANAGER_PORT:-9093}:9093"
+    expose:
+      - "9093"
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
-      - '--web.external-url=http://localhost:9093'
+      - '--web.external-url=https://${ALERTS_DOMAIN:-alerts.local}'
     volumes:
       - alertmanager_data:/alertmanager
-      - ./alertmanager:/etc/alertmanager:ro
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     networks:
-      - sentinel-net
+      - sentinel-backend
     depends_on:
-      - prometheus
+      prometheus:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:9093/-/healthy || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512m
+      start_period: 15s
+    cpus: '0.5'
+    mem_limit: 512m
 
+  # ========================================
+  # LOGS
+  # ========================================
   loki:
     image: grafana/loki:3.1.1
     container_name: sentinel-loki
     restart: unless-stopped
-    ports:
-      - "${LOKI_PORT:-3100}:3100"
+    expose:
+      - "3100"
     command: -config.file=/etc/loki/loki-config.yml
     volumes:
       - loki_data:/loki
       - ./loki:/etc/loki:ro
     networks:
-      - sentinel-net
+      - sentinel-backend
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    <<: *default-limits
+      start_period: 30s
+    cpus: '1.0'
+    mem_limit: 1g
 
-  promtail:
-    image: grafana/promtail:3.1.1
-    container_name: sentinel-promtail
+  # ========================================
+  # TELEMETRY COLLECTOR (replaces promtail)
+  # ========================================
+  alloy:
+    image: grafana/alloy:v0.2.0
+    container_name: sentinel-alloy
     restart: unless-stopped
-    command: -config.file=/etc/promtail/promtail-config.yml
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
     volumes:
-      - ./promtail:/etc/promtail:ro
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
       - /var/log:/var/log:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - sentinel-net
+      - sentinel-backend
     depends_on:
-      - loki
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512m
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:12345/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    cpus: '0.5'
+    mem_limit: 512m
 
+  # ========================================
+  # TRACING
+  # ========================================
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: sentinel-tempo
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - tempo_data:/var/tempo
+      - ./tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+    networks:
+      - sentinel-backend
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3200/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    cpus: '0.5'
+    mem_limit: 1g
+
+  # ========================================
+  # UPTIME / STATUS
+  # ========================================
   uptime-kuma:
     image: louislam/uptime-kuma:1.23.15
     container_name: sentinel-uptime-kuma
     restart: unless-stopped
-    ports:
-      - "${UPTIME_KUMA_PORT:-3001}:3001"
+    expose:
+      - "3001"
     volumes:
       - uptime_kuma_data:/app/data
     networks:
-      - sentinel-net
+      - sentinel-frontend
+      - sentinel-backend
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:3001/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
-    <<: *default-limits
+      start_period: 30s
+    cpus: '0.5'
+    mem_limit: 512m
 
+  # ========================================
+  # EXPORTERS (host-level, monitoring server)
+  # ========================================
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: sentinel-node-exporter
@@ -158,60 +257,112 @@ services:
       - /sys:/host/sys:ro
       - /:/rootfs:ro
     networks:
-      - sentinel-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.3'
-          memory: 256m
+      - sentinel-exporters
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9100/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    cpus: '0.3'
+    mem_limit: 256m
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.51.0
     container_name: sentinel-cadvisor
     restart: unless-stopped
-    ports:
-      - "${CADVISOR_PORT:-8080}:8080"
+    expose:
+      - "8080"
     command:
       - '--housekeeping_interval=30s'
       - '--docker_only=true'
-      - '--disable_metrics=disk,network,tcp,udp,percpu,sched,process'
+      - '--store_container_labels=false'
+      - '--disable_metrics=percpu,sched,process'
     volumes:
       - /:/rootfs:ro
-      - /var/run:/var/run:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
-      - /cgroup:/cgroup:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg:/dev/kmsg
     networks:
-      - sentinel-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 512m
+      - sentinel-exporters
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/metrics || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    cpus: '0.5'
+    mem_limit: 512m
 
   pve-exporter:
     image: prompve/prometheus-pve-exporter:3.0.1
     container_name: sentinel-pve-exporter
     restart: unless-stopped
-    ports:
-      - "${PVE_EXPORTER_PORT:-9221}:9221"
+    expose:
+      - "9221"
     environment:
-      - PVE_USER=${PVE_USER:-root@pam}
+      - PVE_USER=${PVE_USER:-monitoring@pve}
       - PVE_PASSWORD=${PVE_PASSWORD}
       - PVE_VERIFY_SSL=${PVE_VERIFY_SSL:-false}
     networks:
-      - sentinel-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.3'
-          memory: 256m
+      - sentinel-exporters
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9221/metrics || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    cpus: '0.3'
+    mem_limit: 256m
 
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: sentinel-blackbox-exporter
+    restart: unless-stopped
+    expose:
+      - "9115"
+    volumes:
+      - ./blackbox:/etc/blackbox:ro
+    command:
+      - '--config.file=/etc/blackbox/blackbox.yml'
+    networks:
+      - sentinel-backend
+      - sentinel-exporters
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9115/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    cpus: '0.3'
+    mem_limit: 256m
+
+# ========================================
+# NETWORKS
+# ========================================
 networks:
-  sentinel-net:
+  # User-facing: Caddy <-> Grafana / Uptime Kuma
+  sentinel-frontend:
     driver: bridge
-    name: sentinel-stack
+    name: sentinel-frontend
 
+  # Core services: Grafana/Prometheus/Loki/Alertmanager/Alloy/Tempo
+  sentinel-backend:
+    driver: bridge
+    name: sentinel-backend
+
+  # Host exporters: tidak ada akses keluar
+  sentinel-exporters:
+    driver: bridge
+    name: sentinel-exporters
+    internal: true
+
+# ========================================
+# VOLUMES
+# ========================================
 volumes:
   grafana_data:
     name: sentinel-grafana-data
@@ -223,3 +374,11 @@ volumes:
     name: sentinel-loki-data
   uptime_kuma_data:
     name: sentinel-uptime-kuma-data
+  alloy_data:
+    name: sentinel-alloy-data
+  tempo_data:
+    name: sentinel-tempo-data
+  caddy_data:
+    name: sentinel-caddy-data
+  caddy_config:
+    name: sentinel-caddy-config

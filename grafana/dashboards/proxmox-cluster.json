@@ -94,7 +94,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(pve_node_info)",
+          "expr": "count(group by (name) (pve_node_info))",
           "refId": "A"
         }
       ],
@@ -153,7 +153,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(pve_vm_info)",
+          "expr": "count(group by (name) (pve_guest_info{type=\"qemu\"}))",
           "refId": "A"
         }
       ],
@@ -212,7 +212,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(pve_lxc_info)",
+          "expr": "count(group by (name) (pve_guest_info{type=\"lxc\"}))",
           "refId": "A"
         }
       ],
@@ -275,7 +275,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(pve_vm_status{status=\"stopped\"})",
+          "expr": "count(group by (id) (pve_up{id=~\"qemu/.*\"} == 0))",
           "refId": "A"
         }
       ],
@@ -338,7 +338,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "count(pve_lxc_status{status=\"stopped\"})",
+          "expr": "count(group by (id) (pve_up{id=~\"lxc/.*\"} == 0))",
           "refId": "A"
         }
       ],
@@ -452,8 +452,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "pve_node_cpu_usage * 100",
-          "legendFormat": "{{instance}}",
+          "expr": "max by (id) (pve_cpu_usage_ratio{id=~\"node/.*\"} * 100) * on(id) group_left(name) max by (id, name) (pve_node_info)",
+          "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
@@ -554,8 +554,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "pve_node_memory_usage * 100",
-          "legendFormat": "{{instance}}",
+          "expr": "max by (id) ((pve_memory_usage_bytes{id=~\"node/.*\"} / pve_memory_size_bytes{id=~\"node/.*\"}) * 100) * on(id) group_left(name) max by (id, name) (pve_node_info)",
+          "legendFormat": "{{name}}",
           "refId": "A"
         }
       ],
@@ -569,6 +569,300 @@
         "w": 24,
         "x": 0,
         "y": 14
+      },
+      "id": 30,
+      "panels": [],
+      "title": "VM/LXC Resources",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
+      "id": 31,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (id) (pve_cpu_usage_ratio{id=~\"(qemu|lxc)/.*\"} * 100) * on(id) group_left(name, type) max by (id, name, type) (pve_guest_info)",
+          "legendFormat": "{{name}} ({{type}})",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU Usage per VM/LXC",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 85
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
+      "id": 32,
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (id) ((pve_memory_usage_bytes{id=~\"(qemu|lxc)/.*\"} / pve_memory_size_bytes{id=~\"(qemu|lxc)/.*\"}) * 100) * on(id) group_left(name, type) max by (id, name, type) (pve_guest_info)",
+          "legendFormat": "{{name}} ({{type}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Usage per VM/LXC",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "orange",
+                "value": 85
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 33,
+      "options": {
+        "displayMode": "gradient",
+        "maxVizHeight": 300,
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showUnfilled": true,
+        "sizing": "auto",
+        "valueMode": "color"
+      },
+      "pluginVersion": "11.2.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (id) ((pve_disk_usage_bytes{id=~\"(qemu|lxc)/.*\"} / pve_disk_size_bytes{id=~\"(qemu|lxc)/.*\"}) * 100) * on(id) group_left(name, type) max by (id, name, type) (pve_guest_info)",
+          "legendFormat": "{{name}} ({{type}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Disk Usage per VM/LXC",
+      "type": "bargauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 31
       },
       "id": 20,
       "panels": [],
@@ -617,7 +911,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 32
       },
       "id": 21,
       "options": {
@@ -644,8 +938,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(pve_storage_used_bytes / pve_storage_total_bytes) * 100",
-          "legendFormat": "{{instance}} - {{storage}}",
+          "expr": "max by (id) ((pve_disk_usage_bytes{id=~\"storage/.*\"} / pve_disk_size_bytes{id=~\"storage/.*\"}) * 100)",
+          "legendFormat": "{{id}}",
           "refId": "A"
         }
       ],
